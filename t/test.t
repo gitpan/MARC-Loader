@@ -9,6 +9,10 @@ BEGIN {
     use_ok( 'MARC::Loader' );
 }
 my $r={
+          'ldr' => 'optionnal_leader',
+          'ordersubfields' => 1,
+          'cleannsb' => 1,
+          'f005_' => 'controlfield_content',
           'f995' => [
                       {
                         'f995e' => 'Salle de lecture 1',
@@ -69,7 +73,7 @@ my $r={
                       }
                     ],
           'f010d' => '45',
-          'f200a' => 'Les ouvriers des calanques',
+          'f200a' => "\x88Les \x89ouvriers des calanques",
           'i0991' => '3',
           'f210c' => [
                        'La Martiniere'
@@ -142,9 +146,10 @@ my $r={
 my $record = MARC::Loader->new($r);
 
 my $v1=YAML::Dump $record->as_formatted;
-my $v2=YAML::Dump ("LDR                         
-010    _d45
-       _a111242417X
+my $v2=YAML::Dump ("LDR optionnal_leader
+005     controlfield_content
+010    _a111242417X
+       _d45
 035    _a8002
 099 34 _c2011-02-03
        _tLIVRE
@@ -155,10 +160,10 @@ my $v2=YAML::Dump ("LDR
        _apor
        _aspa
 200    _aLes ouvriers des calanques
+       _fICHERFrancois, PAULUS, MARIA 1353? - 1435
        _gITHER, fred
        _gFacundus,hector (05..?-0571?)
        _gBernard de Clairvaux (saint ; 1090?-1153)
-       _fICHERFrancois, PAULUS, MARIA 1353? - 1435
 210    _aParis
        _cLa Martiniere
        _d1998
@@ -173,40 +178,40 @@ my $v2=YAML::Dump ("LDR
 461    _v61
 615    _aCATHEDRALE
 615    _aBATISSEUR
-700    _f1353? - 1435
-       _aPAULUS
+700    _aPAULUS
        _bjean
        _bfrancois
+       _f1353? - 1435
 700    _aICHERFrancois
-701    _f05..?-0571?
-       _aFacundus
+701    _aFacundus
        _bhector
+       _f05..?-0571?
 701    _aITHER
        _bfred
-702    _f1090?-1153
-       _4730
+702    _4730
        _aBernard de Clairvaux
+       _f1090?-1153
 995    _bMPS
-       _eSalle de lecture 3
-       _kMIS 0088
        _cMPS
+       _eSalle de lecture 3
        _f8003-ex
+       _kMIS 0088
        _o0
        _rPRET
 995    _bMP
+       _cMPc
        _eSalle de lecture 1
-       _kNT 0380/6/1
-       _cMPc
        _f8001-ex
-       _o0
-       _rPRET
-995 12 _eSalle de lecture 2
-       _o0
-       _rPRET
-       _bMP
        _kNT 0380/6/1
+       _o0
+       _rPRET
+995 12 _bMP
        _cMPc
-       _f8002-ex");
+       _eSalle de lecture 2
+       _f8002-ex
+       _kNT 0380/6/1
+       _o0
+       _rPRET");
 ok(Compare($v1,$v2))
     or diag(Dump $v1);
 #print $record->as_formatted;
