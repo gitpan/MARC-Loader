@@ -7,7 +7,7 @@ use Carp;
 use MARC::Record;
 use YAML;
 use Scalar::Util qw< reftype >;
-our $VERSION = '0.002';
+our $VERSION = '0.002001';
 our $DEBUG = 0;
 sub debug { $DEBUG and say STDERR @_ }
 
@@ -232,7 +232,7 @@ MARC::Loader - Perl extension for creating MARC record from a hash
 
 =head1 VERSION
 
-Version 0.002
+Version 0.002001
 
 =head1 SYNOPSIS
 
@@ -251,7 +251,7 @@ Version 0.002
 		'f101a' => [ 'lat','fre','spa'],
 		'f215a' => [ 'test' ],
 		'f700'  => [{'f700f' => '1900-1950','f700a' => 'ICHER','f700b' => [ 'jean','francois']},
-					{'f700f' => '1353? - 1435','f700a' => 'PAULUS','f700b' => 'MARIA'}]	};
+			{'f700f' => '1353? - 1435','f700a' => 'PAULUS','f700b' => 'MARIA'}]	};
 	my $record = MARC::Loader->new($foo);
 
 	# Here, the command "print $record->as_formatted;" will return :
@@ -262,16 +262,16 @@ Version 0.002
 	#        _tLIVRE
 	# 101    _alat
 	#        _afre
-	# 	     _aspa
+	#        _aspa
 	# 200    _ale titre
 	# 215    _atest
 	# 700    _aICHER
-	# 	     _bjean
-	# 	     _bfrancois
-	# 	     _f1900-1950
+	#        _bjean
+	#        _bfrancois
+	#        _f1900-1950
 	# 700    _aPAULUS
-	# 	     _bMARIA
-	# 	     _f1353? - 1435
+	#        _bMARIA
+	#        _f1353? - 1435
 
 =head1 DESCRIPTION
 
@@ -279,15 +279,18 @@ This is a Perl extension for creating MARC records from a hash variable.
 MARC::Loader use MARC::Record.
 
 The names of hash keys are very important.
+
 They must begin with one letter ( e.g. C<f>) followed by the 3-digit field ( e.g. C<099>) optionally followed by the letter or digit of the subfield.
 Repeatable fields are arrays of hash ( e.g., 'f700'  => [{'f700f' => '1900','f700a' => 'ICHER'},{'f700f' => '1353','f700a' => 'PAULUS'}] ).
 Repeatable subfields are arrays ( e.g., 'f101a' => [ 'lat','fre','spa'] ).
 Control fields can't be repeatable and are automatically detected when the hash key begin with one letter followed by 3-digit lower than 10 followed by one letter or digit or underscore ( e.g. C<f005_>).
 Indicators must begin with the letter i followed by the 3-digit field followed by the indicator's position (1 or 2) :  e.g. C<i0991>.
+
 Record's leader can be defined with an hash key named 'ldr' ( e.g., 'ldr' => 1 ).
 You can reorder the fields in alphabetical order with an hash key named 'orderfields' ( e.g., 'orderfields' => 1 ).
 You can reorder the subfields of each field in alphabetical order with an hash key named 'ordersubfields' ( e.g., 'ordersubfields' => 1 ).
 You can remove non-sorting characters with an hash key named 'cleannsb' ( e.g., 'cleannsb' => 1 ).
+
 =head1 METHOD
 
 =head2 new()
