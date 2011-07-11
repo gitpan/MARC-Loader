@@ -1,4 +1,6 @@
 Revision history for MARC-Loader
+0.003 Mon July 11 16:53:00 EDT 2011
+    - add ability to reorder fields and subfields in a chosen order
 0.002 Tue May 3 14:53:00 EDT 2011
     - add support of controlfields
     - add ability to define the record's leader

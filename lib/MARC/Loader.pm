@@ -7,7 +7,7 @@ use Carp;
 use MARC::Record;
 use YAML;
 use Scalar::Util qw< reftype >;
-our $VERSION = '0.002001';
+our $VERSION = '0.003001';
 our $DEBUG = 0;
 sub debug { $DEBUG and say STDERR @_ }
 
@@ -21,18 +21,6 @@ sub new {
 	my $lf={};#the field's list
 	my $cf={};#counter where multiple fields with same name
 	my $bf={};#bool ok if field have one subfield at least
-	foreach my $k (keys(%$data)) {
-		if (($k eq "ldr") or ($k eq "orderfields") or ($k eq "ordersubfields") or ($k eq "cleannsb")) {
-			next;
-		}
-		if ( ref( $$data{$k} ) eq "ARRAY" ) {
-			foreach my $v(@{$$data{$k}}) {
-				createfield($k,$lc,$lf,$bf,$cf,$v);
-			}
-		} else {
-			createfield($k,$lc,$lf,$bf,$cf,$$data{$k});
-		}
-	}
 	if (defined($$data{"ldr"}) and $$data{"ldr"} ne "") {
 		$r->leader($$data{"ldr"});
 	}
@@ -45,68 +33,95 @@ sub new {
 	if ($$data{"cleannsb"}) {
 		$cleannsb=1;
 	}
-	foreach my $contk (keys(%$lc)) {
-		$r->insert_fields_ordered( $$lc{$contk} );
-	}
-	foreach my $k (keys(%$lf)) {
-		if ($$bf{$k}==1) {
-			$$lf{$k}->delete_subfield(pos => 0);
-			$r->insert_fields_ordered( $$lf{$k} );
+	foreach my $k ( sort {$a cmp $b} keys(%$data) ) {
+		if (($k eq "ldr") or ($k eq "orderfields") or ($k eq "ordersubfields") or ($k eq "cleannsb")) {
+			next;
+		}
+		if ( ref( $$data{$k} ) eq "ARRAY" ) {
+			foreach my $v ( sort {$a cmp $b} @{$$data{$k}} ) {
+				createfield($k,$lc,$lf,$bf,$cf,$v,$cleannsb);
+			}
+		} else {
+			createfield($k,$lc,$lf,$bf,$cf,$$data{$k},$cleannsb);
 		}
 	}
-	$r=order_cleanrecord($orderfields, $ordersubfields, $cleannsb, $r);
+	foreach my $contk ( sort {$a cmp $b} keys(%$lc) ) {
+		if($orderfields) {
+			$r->insert_fields_ordered( $$lc{$contk} );
+		} else {
+			$r->append_fields( $$lc{$contk} );
+		}
+	}
+	foreach my $k ( sort {$a cmp $b} keys(%$lf) ) {
+		if ($$bf{$k}==1) {
+			$$lf{$k}->delete_subfield(pos => 0);
+			if($orderfields) {
+				$r->insert_fields_ordered( $$lf{$k} );
+			} else {
+				$r->append_fields( $$lf{$k} );
+			}
+		}
+	}
 	$r;
 }
 
 sub createfield {
-	my ($k,$lc,$lf,$bf,$cf,$v) = @_;
+	my ($k,$lc,$lf,$bf,$cf,$v,$cleannsb) = @_;
 	#$k = the hash key that defines the field or subfield name
 	#$v = the field or subfield value
 	#$lc= the controlfield's list
 	#$lf= the field's list
 	#$cf= counter where multiple fields with same name
 	#$bf= bool ok if field have one subfield at least
-	if ($k=~/^(\D)(\d{3})(\w)$/) {
-		if (!exists($$lf{$2})) {
-			if($2<10 and defined($v) and $v ne "") {
-				$$lc{$2} = MARC::Field->new( "$2", $v );
+	my $prefield="";
+	if ($k=~/^((.*)##)?(\D)(\d{3})(\w)$/) {
+		$prefield=$1 if $1;
+		if (!exists($$lf{$prefield.$4})) {
+			if($4<10 and defined($v) and $v ne "") {
+				$v=nsbclean($v) if $cleannsb;
+				$$lc{$prefield.$4} = MARC::Field->new( "$4", $v );
 			} else {
-				$$lf{$2} = MARC::Field->new( "$2", "", "", 0 => "temp" );
+				$$lf{$prefield.$4} = MARC::Field->new( "$4", "", "", 0 => "temp" );
 				#$fnoauth = MARC::Field->new( '009', $noauth );
-				$$bf{$2}=0;
+				$$bf{$prefield.$4}=0;
 				if (defined($v) and $v ne "") {
-					createsubfield($$lf{$2},$3,$v,$k);
-					$$bf{$2}=1;
+					$v=nsbclean($v) if $cleannsb;
+					createsubfield($$lf{$prefield.$4},$5,$v,$k);
+					$$bf{$prefield.$4}=1;
 				}
 			}
 		} else {
 			if (defined($v) and $v ne "") {
-				createsubfield($$lf{$2},$3,$v,$k);
-				$$bf{$2}=1;
+				$v=nsbclean($v) if $cleannsb;
+				createsubfield($$lf{$prefield.$4},$5,$v,$k);
+				$$bf{$prefield.$4}=1;
 			}
 		}
-	} elsif (($k=~/^(\D)(\d{3})$/) and ( ref( $v ) eq "HASH" )) {
-		if (!exists($$cf{$2})) {
-			$$cf{$2}=0;
+	} elsif (($k=~/^((.*)##)?(\D)(\d{3})$/) and ( ref( $v ) eq "HASH" )) {
+		$prefield=$1 if $1;
+		if (!exists($$cf{$prefield.$4})) {
+			$$cf{$prefield.$4}=0;
 		}
-		$$cf{$2}++;
-		if($2<10){warn "controlfields can't be hash : $2";return;}
-		$$lf{$2.$$cf{$2}} = MARC::Field->new( "$2", "", "", 0 => "temp" );
-		$$bf{$2.$$cf{$2}}=0;
-		foreach my $k (keys(%$v)) {
+		$$cf{$prefield.$4}++;
+		if($4<10){warn "controlfields can't be hash : $4";return;}
+		$$lf{$prefield.$4.$$cf{$prefield.$4}} = MARC::Field->new( "$4", "", "", 0 => "temp" );
+		$$bf{$prefield.$4.$$cf{$prefield.$4}}=0;
+		foreach my $k ( sort {$a cmp $b} keys(%$v) ) {
 			if (defined($$v{$k}) and $$v{$k} ne "" and ref($$v{$k}) eq "ARRAY" ) {
-				foreach my $v(@{$$v{$k}}) {
-					if ($k=~/^(\D)(\d{3})(\w)$/) {
-						createsubfield($$lf{$2.$$cf{$2}},$3,$v,$k);
-						$$bf{$2.$$cf{$2}}=1;
+				foreach my $v ( sort {$a cmp $b} @{$$v{$k}} ) {
+					if ($k=~/^((.*)##)?(\D)(\d{3})(\w)$/) {
+						$v=nsbclean($v) if $cleannsb;
+						createsubfield($$lf{$prefield.$4.$$cf{$prefield.$4}},$5,$v,$k);
+						$$bf{$prefield.$4.$$cf{$prefield.$4}}=1;
 					} else {
 						warn "wrong field name : $k";return;
 					}
 				}
 			} elsif (defined($$v{$k}) and $$v{$k} ne "") {
-				if ($k=~/^(\D)(\d{3})(\w)$/) {
-					createsubfield($$lf{$2.$$cf{$2}},$3,$$v{$k},$k);
-					$$bf{$2.$$cf{$2}}=1;
+				if ($k=~/^((.*)##)?(\D)(\d{3})(\w)$/) {
+					$$v{$k}=nsbclean($$v{$k}) if $cleannsb;
+					createsubfield($$lf{$prefield.$4.$$cf{$prefield.$4}},$5,$$v{$k},$k);
+					$$bf{$prefield.$4.$$cf{$prefield.$4}}=1;
 				} else {
 					warn "wrong field name : $k";return;
 				}
@@ -118,14 +133,14 @@ sub createfield {
 }
 
 sub createsubfield {
-	my (($f,$s,$v,$k))=@_;
+	my ($f,$s,$v,$k)=@_;
 	#$f = the field
 	#$s = the subfield name
 	#$k = the hash key that defines the subfield name
 	#$v = the subfield value
-	if ($k=~/^(i)(\d{3})(\w)$/) {
-		my $ind=$3;
-		if ( ($3=~/1|2/) and ($v=~/\d|\|/) ) {
+	if ($k=~/^((.*)##)?(i)(\d{3})(\w)$/) {
+		my $ind=$5;
+		if ( ($5=~/1|2/) and ($v=~/\d|\|/) ) {
 			$f->update( "ind$ind" => $v);
 		} else {
 			warn "wrong ind values : $k=$v";return;
@@ -133,83 +148,6 @@ sub createsubfield {
 	} else {
 		$f->add_subfields( "$s" => $v );
 	}
-}
-
-sub order_cleanrecord {
-	my ($orderfields, $ordersubfields, $cleannsb, $in_record) = @_;
-	#$orderfields : bool to defined if we want to order fields
-	#$ordersubfields : bool to defined if we want to order subfields
-	#$cleannsb : bool to defined if we want to clean Non Sorting Block for each fields and subfields
-	#$in_record : the Marc reacord paramater
-	my $out_record=MARC::Record->new;
-	$out_record->leader($in_record->leader);
-	my @order = qw/0 1 2 3 4 5 6 7 8 9 a b c d e f g h i j k l m n o p q r s t u v w x y z A B C D E F G H I J K L M N O P Q R S T U V W X Y Z/;
-	my %tag_names;
-	if($orderfields)
-	{
-		%tag_names = map( { $$_{_tag} => 1 } $in_record->fields); #eq. my @ordre;foreach my $field ( $in_record->fields ) { push (@ordre, $$field{"_tag"}) } \nmy %tag_names;foreach(@ordre){$tag_names{$_} = 1;}
-	}
-	else
-	{
-		%tag_names = (1=>1);
-	}
-	foreach my $tag(sort({ $a <=> $b } keys(%tag_names)))
-	{
-		my @fields;
-		if($orderfields)
-		{
-			@fields=$in_record->field($tag);
-		}
-		else
-		{
-			@fields=$in_record->fields();
-		}
-		foreach my $field(@fields)
-		{
-			my $newfield;
-			if ($field->is_control_field())
-			{
-				$field->update(nsbclean($field->data())) if $cleannsb;
-				$out_record->append_fields($field);
-			}
-			else
-			{
-				my @subfields;
-				if($ordersubfields)
-				{
-					foreach my $key (@order)
-					{
-						foreach my $subfield ($field->subfield($key))
-						{
-							$subfield=nsbclean($subfield) if $cleannsb;
-							push @subfields, $key, $subfield;
-						}
-					}
-				}
-				else
-				{
-					foreach my $subfield ($field->subfields())
-					{
-						$subfield->[1]=nsbclean($subfield->[1]) if $cleannsb;
-						push @subfields, $subfield->[0], $subfield->[1];
-					}
-				}
-				if (scalar(@subfields) > 0)
-				{
-					eval { $newfield = MARC::Field->new($field->tag(), $field->indicator(1), $field->indicator(2), @subfields); };
-					if ($@)
-					{
-						warn "error : $@";
-					}
-					else
-					{
-						$out_record->append_fields($newfield);
-					}
-				}
-			}
-		}
-	}
-	return $out_record;
 }
 
 sub nsbclean {
@@ -232,14 +170,13 @@ MARC::Loader - Perl extension for creating MARC record from a hash
 
 =head1 VERSION
 
-Version 0.002001
+Version 0.003001
 
 =head1 SYNOPSIS
 
 	use MARC::Loader;
 	my $foo={
 		'ldr' => 'optionnal_leader',
-		'ordersubfields' => 1,
 		'cleannsb' => 1,
 		'f005_' => 'controlfield_content',
 		'f010d' => '45',
@@ -248,30 +185,38 @@ Version 0.002001
 		'i0991' => '3',
 		'i0992' => '4',
 		'f200a' => "\x88le \x89titre",
-		'f101a' => [ 'lat','fre','spa'],
+		'001##f101a' => [ 'lat','fre','spa'],
 		'f215a' => [ 'test' ],
 		'f700'  => [{'f700f' => '1900-1950','f700a' => 'ICHER','f700b' => [ 'jean','francois']},
-			{'f700f' => '1353? - 1435','f700a' => 'PAULUS','f700b' => 'MARIA'}]	};
+			{'f700f' => '1353? - 1435','f700a' => 'PAULUS','f700b' => 'MARIA'}],
+		'f995' => [{'f995e' => 'S1','f995b' => 'MP','f995f' => '8002-ex'},
+			{'001##f995e' => 'S2','002##f995b' => 'MP','005##f995f' => '8001-ex'}]};
 	my $record = MARC::Loader->new($foo);
 
 	# Here, the command "print $record->as_formatted;" will return :
 	# LDR optionnal_leader
 	# 005     controlfield_content
+	# 101    _afre
+	#        _alat
+	#        _aspa
 	# 010    _d45
 	# 099 34 _c2011-02-03
 	#        _tLIVRE
-	# 101    _alat
-	#        _afre
-	#        _aspa
 	# 200    _ale titre
 	# 215    _atest
 	# 700    _aICHER
-	#        _bjean
 	#        _bfrancois
+	#        _bjean
 	#        _f1900-1950
 	# 700    _aPAULUS
 	#        _bMARIA
 	#        _f1353? - 1435
+	# 995    _bMP
+	#        _eS1
+	#        _f8002-ex
+	# 995    _eS2
+	#        _bMP
+	#        _f8001-ex
 
 =head1 DESCRIPTION
 
@@ -287,9 +232,17 @@ Control fields can't be repeatable and are automatically detected when the hash 
 Indicators must begin with the letter i followed by the 3-digit field followed by the indicator's position (1 or 2) :  e.g. C<i0991>.
 
 Record's leader can be defined with an hash key named 'ldr' ( e.g., 'ldr' => 1 ).
-You can reorder the fields in alphabetical order with an hash key named 'orderfields' ( e.g., 'orderfields' => 1 ).
-You can reorder the subfields of each field in alphabetical order with an hash key named 'ordersubfields' ( e.g., 'ordersubfields' => 1 ).
-You can remove non-sorting characters with an hash key named 'cleannsb' ( e.g., 'cleannsb' => 1 ).
+
+=head3 reorder fields and subfields
+
+Fields and subfields are in lexically order. If you want reorder fields and subfields differently, you can add a reordering string (necessarily followed by ##) at the beginning of hash keys (e.g., to reorder the subfields of f995 to have $e followed by $b : 'f995' => [{'001##f995e' => 'S2','002##f995b' => 'MP')]};).
+If you want to reorder fields, please note that the controlfields will always be located before the other (e.g., if you define '001##f101a' => [ 'lat','fre','spa'] , the f101 will be placed after the last controlfield ).
+
+Be careful, the reorder is made lexically, not numerically : 10 will be placed before 2, while 002 will be placed before 010.
+
+If the script you use to build your hash requires you to precede fields AND subfields with a reordering string when you want to reorder only those sub-fields, you can force the module to reorder the fields in alphabetical order with an hash key named 'orderfields' ( e.g., 'orderfields' => 1 ).
+
+You can also remove non-sorting characters with an hash key named 'cleannsb' ( e.g., 'cleannsb' => 1 ).
 
 =head1 METHOD
 

@@ -10,18 +10,19 @@ BEGIN {
 }
 my $r={
           'ldr' => 'optionnal_leader',
-          'ordersubfields' => 1,
+          'orderfields' => 0,
+          'ordersubfields' => 0,
           'cleannsb' => 1,
           'f005_' => 'controlfield_content',
           'f995' => [
                       {
-                        'f995e' => 'Salle de lecture 1',
-                        'f995b' => 'MP',
-                        'f995k' => 'NT 0380/6/1',
-                        'f995c' => 'MPc',
-                        'f995f' => '8001-ex',
-                        'f995r' => 'PRET',
-                        'f995o' => '0'
+                        '001##f995e' => 'Salle de lecture 1',
+                        '002##f995b' => 'MP',
+                        '003##f995k' => 'NT 0380/6/1',
+                        '004##f995c' => 'MPc',
+                        '005##f995f' => '8001-ex',
+                        '006##f995r' => 'PRET',
+                        '007##f995o' => '0'
                       },
                       {
 						'i9951' => '1',
@@ -58,7 +59,7 @@ my $r={
           'f210a' => [
                        'Paris'
                      ],
-          'f300' => [
+          '001##f300' => [
                       {
                         'f300a' => 'tabl. photos'
                       }
@@ -143,73 +144,73 @@ my $r={
                     ],
           'f215c' => 'ill. coul.'
         };
-my $record = MARC::Loader->new($r);
 
+my $record = MARC::Loader->new($r);
 my $v1=YAML::Dump $record->as_formatted;
 my $v2=YAML::Dump ("LDR optionnal_leader
 005     controlfield_content
+300    _atabl. photos
 010    _a111242417X
        _d45
 035    _a8002
 099 34 _c2011-02-03
        _tLIVRE
-101    _alat
-       _afre
-       _ager
+101    _afre
        _agem
+       _ager
+       _alat
        _apor
        _aspa
 200    _aLes ouvriers des calanques
        _fICHERFrancois, PAULUS, MARIA 1353? - 1435
-       _gITHER, fred
-       _gFacundus,hector (05..?-0571?)
        _gBernard de Clairvaux (saint ; 1090?-1153)
+       _gFacundus,hector (05..?-0571?)
+       _gITHER, fred
 210    _aParis
        _cLa Martiniere
        _d1998
 215    _a201
        _cill. coul.
-225    _aCalanquaises Kommentar
-       _v61
 225    _aSources calanquaises
        _v48
-300    _atabl. photos
+225    _aCalanquaises Kommentar
+       _v61
 461    _v48
 461    _v61
 615    _aCATHEDRALE
 615    _aBATISSEUR
-700    _aPAULUS
-       _bjean
-       _bfrancois
-       _f1353? - 1435
 700    _aICHERFrancois
+700    _aPAULUS
+       _bfrancois
+       _bjean
+       _f1353? - 1435
+701    _aITHER
+       _bfred
 701    _aFacundus
        _bhector
        _f05..?-0571?
-701    _aITHER
-       _bfred
 702    _4730
        _aBernard de Clairvaux
        _f1090?-1153
-995    _bMPS
-       _cMPS
-       _eSalle de lecture 3
-       _f8003-ex
-       _kMIS 0088
-       _o0
-       _rPRET
-995    _bMP
-       _cMPc
-       _eSalle de lecture 1
-       _f8001-ex
+995    _eSalle de lecture 1
+       _bMP
        _kNT 0380/6/1
-       _o0
+       _cMPc
+       _f8001-ex
        _rPRET
+       _o0
 995 12 _bMP
        _cMPc
        _eSalle de lecture 2
        _f8002-ex
        _kNT 0380/6/1
+       _o0
+       _rPRET
+995    _bMPS
+       _cMPS
+       _eSalle de lecture 3
+       _f8003-ex
+       _kMIS 0088
        _o0
        _rPRET");
 ok(Compare($v1,$v2))
