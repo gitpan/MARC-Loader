@@ -7,7 +7,7 @@ use Carp;
 use MARC::Record;
 use YAML;
 use Scalar::Util qw< reftype >;
-our $VERSION = '0.003001';
+our $VERSION = '0.004001';
 our $DEBUG = 0;
 sub debug { $DEBUG and say STDERR @_ }
 
@@ -103,27 +103,42 @@ sub createfield {
 			$$cf{$prefield.$4}=0;
 		}
 		$$cf{$prefield.$4}++;
-		if($4<10){warn "controlfields can't be hash : $4";return;}
-		$$lf{$prefield.$4.$$cf{$prefield.$4}} = MARC::Field->new( "$4", "", "", 0 => "temp" );
-		$$bf{$prefield.$4.$$cf{$prefield.$4}}=0;
-		foreach my $k ( sort {$a cmp $b} keys(%$v) ) {
-			if (defined($$v{$k}) and $$v{$k} ne "" and ref($$v{$k}) eq "ARRAY" ) {
-				foreach my $v ( sort {$a cmp $b} @{$$v{$k}} ) {
+		if($4<10){
+			foreach my $k ( sort {$a cmp $b} keys(%$v) ) {
+				if (defined($$v{$k}) and $$v{$k} ne "") {
 					if ($k=~/^((.*)##)?(\D)(\d{3})(\w)$/) {
-						$v=nsbclean($v) if $cleannsb;
-						createsubfield($$lf{$prefield.$4.$$cf{$prefield.$4}},$5,$v,$k);
+						$$v{$k}=nsbclean($$v{$k}) if $cleannsb;
+						$$lc{$prefield.$4.$$cf{$prefield.$4}} = MARC::Field->new( "$4", $$v{$k} );
 						$$bf{$prefield.$4.$$cf{$prefield.$4}}=1;
 					} else {
 						warn "wrong field name : $k";return;
 					}
 				}
-			} elsif (defined($$v{$k}) and $$v{$k} ne "") {
-				if ($k=~/^((.*)##)?(\D)(\d{3})(\w)$/) {
-					$$v{$k}=nsbclean($$v{$k}) if $cleannsb;
-					createsubfield($$lf{$prefield.$4.$$cf{$prefield.$4}},$5,$$v{$k},$k);
-					$$bf{$prefield.$4.$$cf{$prefield.$4}}=1;
-				} else {
-					warn "wrong field name : $k";return;
+			}
+		}
+		else
+		{
+			$$lf{$prefield.$4.$$cf{$prefield.$4}} = MARC::Field->new( "$4", "", "", 0 => "temp" );
+			$$bf{$prefield.$4.$$cf{$prefield.$4}}=0;
+			foreach my $k ( sort {$a cmp $b} keys(%$v) ) {
+				if (defined($$v{$k}) and $$v{$k} ne "" and ref($$v{$k}) eq "ARRAY" ) {
+					foreach my $v ( sort {$a cmp $b} @{$$v{$k}} ) {
+						if ($k=~/^((.*)##)?(\D)(\d{3})(\w)$/) {
+							$v=nsbclean($v) if $cleannsb;
+							createsubfield($$lf{$prefield.$4.$$cf{$prefield.$4}},$5,$v,$k);
+							$$bf{$prefield.$4.$$cf{$prefield.$4}}=1;
+						} else {
+							warn "wrong field name : $k";return;
+						}
+					}
+				} elsif (defined($$v{$k}) and $$v{$k} ne "") {
+					if ($k=~/^((.*)##)?(\D)(\d{3})(\w)$/) {
+						$$v{$k}=nsbclean($$v{$k}) if $cleannsb;
+						createsubfield($$lf{$prefield.$4.$$cf{$prefield.$4}},$5,$$v{$k},$k);
+						$$bf{$prefield.$4.$$cf{$prefield.$4}}=1;
+					} else {
+						warn "wrong field name : $k";return;
+					}
 				}
 			}
 		}
@@ -166,72 +181,106 @@ __END__
 
 =head1 NAME
 
-MARC::Loader - Perl extension for creating MARC record from a hash
+MARC::Loader - Perl module for creating MARC record from a hash
 
 =head1 VERSION
 
-Version 0.003001
+Version 0.004001
 
 =head1 SYNOPSIS
 
-	use MARC::Loader;
-	my $foo={
-		'ldr' => 'optionnal_leader',
-		'cleannsb' => 1,
-		'f005_' => 'controlfield_content',
-		'f010d' => '45',
-		'f099c' => '2011-02-03',
-		'f099t' => 'LIVRE',
-		'i0991' => '3',
-		'i0992' => '4',
-		'f200a' => "\x88le \x89titre",
-		'001##f101a' => [ 'lat','fre','spa'],
-		'f215a' => [ 'test' ],
-		'f700'  => [{'f700f' => '1900-1950','f700a' => 'ICHER','f700b' => [ 'jean','francois']},
-			{'f700f' => '1353? - 1435','f700a' => 'PAULUS','f700b' => 'MARIA'}],
-		'f995' => [{'f995e' => 'S1','f995b' => 'MP','f995f' => '8002-ex'},
-			{'001##f995e' => 'S2','002##f995b' => 'MP','005##f995f' => '8001-ex'}]};
-	my $record = MARC::Loader->new($foo);
+    use MARC::Loader;
+    my $foo={
+            'ldr' => 'optionnal_leader',
+            'cleannsb' => 1,
+            'f005'  => [
+                        {
+                            'f005_' => 'controlfield_contenta'
+                        },
+                        {
+                            'f005_' => 'controlfield_contentb'
+                        }
+                       ],
+            'f006_' => 'controlfield_content',
+            'f010d' => '45',
+            'f099c' => '2011-02-03',
+            'f099t' => 'LIVRE',
+            'i0991' => '3',
+            'i0992' => '4',
+            'f200a' => "\x88le \x89titre",
+            '001##f101a' => ['lat','fre','spa'],
+            'f215a' => [ 'test' ],
+            'f700'  => [
+                        {
+                            'f700f' => '1900-1950',
+                            'f700a' => 'ICHER',
+                            'f700b' => ['jean','francis']
+                        },
+                        {
+                            'f700f' => '1353? - 1435',
+                            'f700a' => 'PAULUS',
+                            'f700b' => 'MARIA'}
+                        ],
+            'f995'  => [
+                        {
+                            'f995e' => 'S1',
+                            'f995b' => 'MP',
+                            'f995f' => '8002-ex'
+                        },
+                        {
+                            '001##f995e' => 'S2',
+                            '002##f995b' => 'MP',
+                            '005##f995f' => '8001-ex'
+                        }
+                       ]
+            };
+    my $record = MARC::Loader->new($foo);
 
-	# Here, the command "print $record->as_formatted;" will return :
-	# LDR optionnal_leader
-	# 005     controlfield_content
-	# 101    _afre
-	#        _alat
-	#        _aspa
-	# 010    _d45
-	# 099 34 _c2011-02-03
-	#        _tLIVRE
-	# 200    _ale titre
-	# 215    _atest
-	# 700    _aICHER
-	#        _bfrancois
-	#        _bjean
-	#        _f1900-1950
-	# 700    _aPAULUS
-	#        _bMARIA
-	#        _f1353? - 1435
-	# 995    _bMP
-	#        _eS1
-	#        _f8002-ex
-	# 995    _eS2
-	#        _bMP
-	#        _f8001-ex
+    # Here, the command "print $record->as_formatted;" will return :
+    # LDR optionnal_leader
+    # 005     controlfield_contenta
+    # 005     controlfield_contentb
+    # 006     controlfield_content
+    # 101    _afre
+    #        _alat
+    #        _aspa
+    # 010    _d45
+    # 099 34 _c2011-02-03
+    #        _tLIVRE
+    # 200    _ale titre
+    # 215    _atest
+    # 700    _aICHER
+    #        _bfrancis
+    #        _bjean
+    #        _f1900-1950
+    # 700    _aPAULUS
+    #        _bMARIA
+    #        _f1353? - 1435
+    # 995    _bMP
+    #        _eS1
+    #        _f8002-ex
+    # 995    _eS2
+    #        _bMP
+    #        _f8001-ex
 
 =head1 DESCRIPTION
 
-This is a Perl extension for creating MARC records from a hash variable. 
+This is a Perl module for creating MARC records from a hash variable. 
 MARC::Loader use MARC::Record.
 
-The names of hash keys are very important.
+=head3 Hash keys naming convention.
 
-They must begin with one letter ( e.g. C<f>) followed by the 3-digit field ( e.g. C<099>) optionally followed by the letter or digit of the subfield.
+The names of hash keys are very important. They must begin with letter B<f> followed by the B<3-digit> field name ( e.g. f099), followed, for the subfields, by their B<letter or digit> ( e.g. B<f501b>).
+
 Repeatable fields are arrays of hash ( e.g., 'f700'  => [{'f700f' => '1900','f700a' => 'ICHER'},{'f700f' => '1353','f700a' => 'PAULUS'}] ).
-Repeatable subfields are arrays ( e.g., 'f101a' => [ 'lat','fre','spa'] ).
-Control fields can't be repeatable and are automatically detected when the hash key begin with one letter followed by 3-digit lower than 10 followed by one letter or digit or underscore ( e.g. C<f005_>).
-Indicators must begin with the letter i followed by the 3-digit field followed by the indicator's position (1 or 2) :  e.g. C<i0991>.
 
-Record's leader can be defined with an hash key named 'ldr' ( e.g., 'ldr' => 1 ).
+Repeatable subfields are arrays ( e.g., 'f101a' => [ 'lat','fre','spa'] ).
+
+Controlfields are automatically detected when the hash key begin with letter B<f> followed by B<3-digit lower than 10> followed by B<underscore> ( e.g. B<f005_>). 
+
+Indicators must begin with the letter i followed by the 3-digit field name followed by the indicator's position (1 or 2) :  e.g. C<i0991>.
+
+Record's leader can be defined with the hash key 'ldr' ( e.g., 'ldr' => 1 ).
 
 =head3 reorder fields and subfields
 
@@ -252,7 +301,7 @@ You can also remove non-sorting characters with an hash key named 'cleannsb' ( e
 
 =item * $record = MARC::Loader->new($foo);
 
-it's the only function you'll use.
+This is the only method provided by the module.
 
 =back
 
